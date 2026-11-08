@@ -77,9 +77,10 @@ Normalized review fields: `source, store, poi_id, author, rating, date, content,
   - **exponential time decay** so recent reviews weigh more.
 - The report shows sample size, rating distribution, representative quotes, and what drives the score.
 
-### 6. Web application (planned)
+### 6. Web application (in progress)
 
-- A small FastAPI service serves the UI and job endpoints; analysis runs in a single-concurrency background worker (keeps collection gentle on the data sources); the result page explains the score and quotes its evidence.
+- A minimal FastAPI job service lives in `backend/`: one background worker, an in-memory job store, and cooperative cancellation while queued, collecting or analysing. Collection and analysis are still simulated.
+- The full UI, report pages and deployment wiring are planned. See [`backend/README.md`](backend/README.md) for the API contract and integration notes.
 
 ### 7. Tunnel tooling (`tools/`)
 
@@ -101,13 +102,18 @@ DineLens/
 │   ├── amap_official.py     # AMap Web Service API wrapper
 │   ├── baidu_official.py    # Baidu Place API wrapper
 │   └── common.py            # storage & utility helpers
+├── backend/                 # minimal job service (FastAPI + cancellation)
+│   ├── app.py
+│   ├── job_manager.py
+│   ├── test_cancel.py
+│   └── README.md
 ├── tools/                   # Cloudflare Tunnel manager (GUI + CLI)
 │   ├── tunnel.py
 │   ├── tunnel_gui.py
 │   ├── README.md
 │   └── *.example.json
 ├── config.example.json      # copy to config.json for official API keys
-├── requirements.txt         # requests, playwright
+├── requirements.txt         # requests, playwright, fastapi, uvicorn
 └── LICENSE
 ```
 
@@ -141,12 +147,20 @@ python main.py run --source amap --keyword "店名 城市" --city-code 330100 --
 
 Note: `--headed` opens a visible browser window so that a CAPTCHA/slider can be completed manually when a platform requires it; the verified session is stored in `browser-profile/` and reused afterwards.
 
+To run the minimal job service and the cancellation demo:
+
+```bash
+python -m uvicorn backend.app:app --reload --port 8000
+```
+
+Then open `web/jobs-demo.html` (or `http://127.0.0.1:8000/docs`). Jobs can be cancelled while queued, collecting or analysing; a cancelled job produces no report or history entry.
+
 ## Roadmap
 
 - **Phase 1 — Data pipeline** (done): search, collection, de-duplication, export.
 - **Phase 2 — Analysis engine**: LLM screening, classification, summarization.
 - **Phase 3 — Scoring & report**: weighted score, explainable report content.
-- **Phase 4 — Web application**: background jobs, report pages, deployment via `tools/`.
+- **Phase 4 — Web application** (in progress): minimal job queue and three-stage cancellation in `backend/`; full UI, report pages and deployment still pending.
 
 ## Data & Compliance
 

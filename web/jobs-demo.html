@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DineLens 任务与取消演示</title>
+<style>
+  :root {
+    --ink: #102a2e;
+    --navy: #1f3864;
+    --teal: #0f6e6e;
+    --muted: #5b6b6b;
+    --line: #d8e3e3;
+    --bg: #f0f6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 28px; color: var(--navy); }
+  header a { color: var(--teal); font-size: 14px; text-decoration: none; }
+  header a:hover { text-decoration: underline; }
+  .lede { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 8px 0 24px; }
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label { font-size: 13px; color: var(--muted); }
+  input {
+    font: inherit;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ink);
+  }
+  #store { flex: 1 1 260px; }
+  #apiBase { flex: 1 1 300px; font-size: 12px; color: var(--muted); }
+  button {
+    font: inherit;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 8px;
+    background: var(--navy);
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #2a4a85; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.secondary { background: #e6eeee; color: var(--navy); }
+  button.danger { background: #a33a3a; padding: 6px 12px; font-size: 13px; }
+  button.danger:hover { background: #8c2f2f; }
+  #message { min-height: 20px; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  h2 { font-size: 16px; color: var(--navy); margin: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  td.id { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); }
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: #e9eeee;
+    color: #405252;
+    white-space: nowrap;
+  }
+  .badge.queued { background: #eceff4; color: #52627a; }
+  .badge.collecting { background: #e2f0f0; color: #0b5d5d; }
+  .badge.analysing { background: #eee7f6; color: #5b3d80; }
+  .badge.done { background: #e2f2e6; color: #23633a; }
+  .badge.failed { background: #f8e3e3; color: #8c2f2f; }
+  .badge.needs_operator { background: #fdf0db; color: #7a5410; }
+  .badge.cancelled { background: #ececec; color: #5f5f5f; }
+  .progress { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 18px 0; }
+  .note { font-size: 12px; color: var(--muted); line-height: 1.7; }
+  .note strong { color: var(--ink); }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #eef3f3; padding: 1px 5px; border-radius: 4px; }
+  @media (max-width: 640px) {
+    th:nth-child(1), td:nth-child(1), th:nth-child(5), td:nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>DineLens 任务与取消</h1>
+    <a href="index.html">返回首页</a>
+  </header>
+  <p class="lede">
+    最小演示：任务在 queued、collecting、analysing 三个阶段都可以取消。取消是协作式的，
+    当前步骤结束后停止，不生成报告，也不写历史。采集与分析目前是模拟步骤。
+  </p>
+
+  <section class="card">
+    <div class="row">
+      <input id="store" type="text" placeholder="餐厅或分店名称，例如：楼外楼 孤山路店" maxlength="200" autocomplete="off">
+      <button id="createBtn" type="button">开始分析</button>
+      <button id="refreshBtn" class="secondary" type="button">刷新</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label for="apiBase">API 地址</label>
+      <input id="apiBase" type="text" spellcheck="false">
+      <button id="saveApiBtn" class="secondary" type="button">保存</button>
+    </div>
+    <div id="message"></div>
+  </section>
+
+  <section class="card">
+    <h2>任务列表</h2>
+    <div id="jobs"><p class="empty">还没有任务。</p></div>
+  </section>
+
+  <section class="card note">
+    <strong>接口约定</strong><br>
+    <code>POST /jobs</code> 创建任务 · <code>GET /jobs</code> 列表 · <code>GET /jobs/{id}</code> 状态 ·
+    <code>POST /jobs/{id}/cancel</code> 取消<br>
+    浏览器访问 Pages 时使用 <code>/api/jobs</code>，Pages Function 会把 <code>/api</code> 前缀去掉再转发给后端。
+    直接双击打开本页时默认连接 <code>http://127.0.0.1:8000</code>。<br>
+    已完成、失败、需要人工处理的任务不接受用户取消；已取消的任务再次取消仍然返回成功，保持幂等。
+  </section>
+</main>
+
+<script>
+const ACTIVE = new Set(['queued', 'collecting', 'analysing']);
+const LABELS = {
+  queued: '排队中',
+  collecting: '采集中',
+  analysing: '分析中',
+  done: '已完成',
+  failed: '失败',
+  needs_operator: '需要人工处理',
+  cancelled: '已取消',
+};
+
+const storeInput = document.getElementById('store');
+const apiInput = document.getElementById('apiBase');
+const message = document.getElementById('message');
+const jobsEl = document.getElementById('jobs');
+const createBtn = document.getElementById('createBtn');
+
+apiInput.value = readSavedApi() || defaultApiBase();
+
+let polling = false;
+let timer = null;
+
+function defaultApiBase() {
+  return location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '/api';
+}
+
+function readSavedApi() {
+  try { return localStorage.getItem('dinelens-api'); } catch { return null; }
+}
+
+function saveApi(value) {
+  try { localStorage.setItem('dinelens-api', value); } catch { /* file:// may block storage */ }
+}
+
+function apiUrl(path) {
+  return apiInput.value.replace(/\/+$/, '') + path;
+}
+
+function say(text, error = false) {
+  message.textContent = text;
+  message.style.color = error ? '#a33a3a' : '';
+}
+
+async function request(method, path, body) {
+  const options = { method, cache: 'no-store', headers: {} };
+  if (body !== undefined) {
+    options.headers['content-type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+  const resp = await fetch(apiUrl(path), options);
+  const text = await resp.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
+  if (!resp.ok) {
+    const detail = data && data.detail ? data.detail : 'HTTP ' + resp.status;
+    const err = new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    err.status = resp.status;
+    throw err;
+  }
+  return data;
+}
+
+function el(tag, props = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'className') node.className = value;
+    else if (key === 'text') node.textContent = value;
+    else node[key] = value;
+  }
+  for (const child of children) node.append(child);
+  return node;
+}
+
+function render(jobs) {
+  jobsEl.replaceChildren();
+  if (!jobs.length) {
+    jobsEl.append(el('p', { className: 'empty', text: '还没有任务。' }));
+    return;
+  }
+
+  const table = el('table');
+  table.append(el('thead', {}, [
+    el('tr', {}, [
+      el('th', { text: '任务' }),
+      el('th', { text: '餐厅' }),
+      el('th', { text: '状态' }),
+      el('th', { text: '进度' }),
+      el('th', { text: '操作' }),
+    ]),
+  ]));
+
+  const tbody = el('tbody');
+  for (const job of jobs) {
+    const badge = el('span', {
+      className: 'badge ' + job.state,
+      text: LABELS[job.state] || job.state,
+    });
+
+    const actionCell = el('td');
+    if (ACTIVE.has(job.state) && !job.cancel_requested) {
+      const cancel = el('button', { className: 'danger', type: 'button', text: '取消' });
+      cancel.addEventListener('click', () => cancelJob(job.id, cancel));
+      actionCell.append(cancel);
+    } else if (job.cancel_requested && ACTIVE.has(job.state)) {
+      actionCell.append(el('span', { className: 'progress', text: '取消中…' }));
+    } else if (job.state === 'done' && job.report) {
+      actionCell.append(el('span', { className: 'progress', text: '报告已生成' }));
+    } else if (job.state === 'cancelled') {
+      actionCell.append(el('span', { className: 'progress', text: '未生成报告' }));
+    } else if (job.state === 'failed') {
+      actionCell.append(el('span', { className: 'progress', text: job.error || '可重试' }));
+    }
+
+    const progressText = job.error && job.state === 'failed'
+      ? job.error
+      : (job.progress || '');
+
+    tbody.append(el('tr', {}, [
+      el('td', { className: 'id', text: job.id }),
+      el('td', { text: job.store }),
+      el('td', {}, [badge]),
+      el('td', { className: 'progress', text: progressText }),
+      actionCell,
+    ]));
+  }
+  table.append(tbody);
+  jobsEl.append(table);
+}
+
+async function refresh() {
+  if (polling) return;
+  polling = true;
+  try {
+    const jobs = await request('GET', '/jobs');
+    render(jobs);
+    schedule(jobs);
+  } catch (err) {
+    say('无法获取任务：' + err.message, true);
+    stopPolling();
+  } finally {
+    polling = false;
+  }
+}
+
+function schedule(jobs) {
+  stopPolling();
+  if (jobs.some(job => ACTIVE.has(job.state))) {
+    timer = setTimeout(refresh, 800);
+  }
+}
+
+function stopPolling() {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+}
+
+async function createJob() {
+  const store = storeInput.value.trim();
+  if (!store) {
+    say('先填写餐厅或分店名称。', true);
+    storeInput.focus();
+    return;
+  }
+  createBtn.disabled = true;
+  try {
+    const job = await request('POST', '/jobs', { store });
+    storeInput.value = '';
+    say('已创建任务 ' + job.id + '。');
+    await refresh();
+  } catch (err) {
+    say('创建失败：' + err.message, true);
+  } finally {
+    createBtn.disabled = false;
+  }
+}
+
+async function waitUntilSettled(id) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const job = await request('GET', '/jobs/' + encodeURIComponent(id));
+    if (!ACTIVE.has(job.state)) return job;
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+  return null;
+}
+
+async function cancelJob(id, button) {
+  button.disabled = true;
+  try {
+    const job = await request('POST', '/jobs/' + encodeURIComponent(id) + '/cancel');
+    if (job.state === 'cancelled') {
+      say('任务已取消。');
+      await refresh();
+      return;
+    }
+
+    say('已请求取消，正在停止当前步骤…');
+    await refresh();
+
+    const settled = await waitUntilSettled(id);
+    if (settled && settled.state === 'cancelled') {
+      say('任务已取消。');
+    } else if (settled) {
+      say('任务已结束：' + (LABELS[settled.state] || settled.state), true);
+    } else {
+      say('取消请求已提交，任务仍在收尾，请稍后刷新。');
+    }
+    await refresh();
+  } catch (err) {
+    if (err.status === 409) {
+      say('任务已经结束，不能再取消。', true);
+      await refresh();
+    } else {
+      say('取消失败：' + err.message, true);
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+createBtn.addEventListener('click', createJob);
+storeInput.addEventListener('keydown', event => {
+  if (event.key === 'Enter') createJob();
+});
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  say('');
+  refresh();
+});
+document.getElementById('saveApiBtn').addEventListener('click', () => {
+  saveApi(apiInput.value.trim() || defaultApiBase());
+  say('API 地址已保存。');
+  refresh();
+});
+
+refresh();
+</script>
+</body>
+</html>

@@ -10,9 +10,11 @@
          background: #f0f6ff; color: #1f3864; gap: 12px; }
   h1 { margin: 0; font-size: 32px; }
   p { margin: 0; color: #556; font-size: 14px; }
-  button { padding: 10px 24px; font-size: 16px; border: none; border-radius: 8px;
-           background: #1f3864; color: #fff; cursor: pointer; }
-  button:hover { background: #2a4a85; }
+  button, .link-button { padding: 10px 24px; font-size: 16px; border: none; border-radius: 8px;
+           background: #1f3864; color: #fff; cursor: pointer; text-decoration: none; }
+  button:hover, .link-button:hover { background: #2a4a85; }
+  .link-button.secondary { background: #e6eeee; color: #1f3864; }
+  .link-button.secondary:hover { background: #d8e4e4; }
   #result { font-size: 14px; color: #555; max-width: 560px; text-align: center;
             white-space: pre-wrap; word-break: break-all; }
 </style>
@@ -21,6 +23,7 @@
   <h1>DineLens</h1>
   <p>前端托管在 Cloudflare Pages · 后端通过隧道连接家里的电脑</p>
   <button onclick="testBackend()">测试后端连通</button>
+  <a class="link-button secondary" href="jobs-demo.html">任务与取消演示</a>
   <div id="result">未测试</div>
 
 <script>

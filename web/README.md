@@ -18,7 +18,8 @@ DineLens/
 │   └── api/
 │       └── [[path]].js         # /api/*  ->  $BACKEND_URL/*
 └── web/                        # Pages build output directory
-    └── index.html              # placeholder frontend (replace with the real app)
+    ├── index.html              # placeholder frontend (replace with the real app)
+    └── jobs-demo.html          # minimal job list + three-stage cancel demo
 ```
 
 > Cloudflare requirement: the `/functions` directory lives at the **root of the
@@ -54,6 +55,10 @@ DineLens/
   more environment variables, `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`;
   the function attaches them to the proxied request so only it can pass. Direct
   browser visits to the backend hostname are then blocked by Cloudflare.
-- The real application will call endpoints like `/api/analyze` (FastAPI backend);
-  the frontend uses relative paths (`/api/...`) and does not need to know about
-  the tunnel at all.
+- The minimal demo calls `/api/jobs` and `/api/jobs/{id}/cancel`. The Function
+  strips the `/api` prefix, so the FastAPI app exposes `/jobs` and
+  `/jobs/{id}/cancel`. The frontend uses relative paths (`/api/...`) and does not
+  need to know about the tunnel at all.
+- `jobs-demo.html` can also be opened directly from disk for local development.
+  It then defaults to `http://127.0.0.1:8000`, and the API address can be changed
+  in the page.
