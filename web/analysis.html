@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DineLens 餐厅评论分析</title>
+  <link rel="stylesheet" href="reports.css">
+  <script src="api.js" defer></script>
+  <script src="analysis.js" defer></script>
+</head>
+<body>
+<main>
+  <nav><a href="index.html">DineLens</a> <a href="jobs-demo.html">任务列表</a></nav>
+  <h1>餐厅评论分析</h1>
+  <form id="search-form">
+    <label>餐厅名称<input id="restaurant" required maxlength="200" autocomplete="off"></label>
+    <label>城市<input id="city" required maxlength="100" autocomplete="address-level2"></label>
+    <label>评论来源<select id="source"><option value="amap">高德地图</option><option value="baidu">百度地图</option></select></label>
+    <label>城市代码<input id="city-code" inputmode="numeric" pattern="[0-9]{1,8}" placeholder="百度浏览器搜索时填写"></label>
+    <button id="search-button">搜索分店</button>
+  </form>
+  <p id="message" role="status" aria-live="polite">输入城市和餐厅名称，确认分店后开始分析。</p>
+  <section id="candidates" aria-label="候选分店"></section>
+  <section id="task" hidden>
+    <h2>当前任务</h2>
+    <p id="task-state"></p>
+    <button id="cancel" type="button">取消任务</button>
+    <a id="report-link" hidden>打开报告</a>
+  </section>
+  <section>
+    <h2>报告通知 <span id="unread-count"></span></h2>
+    <p id="notification-status" role="status"></p>
+    <div id="notifications"></div>
+    <button id="more-notifications" type="button" class="secondary" hidden>更多通知</button>
+  </section>
+  <section>
+    <h2>我的历史报告</h2>
+    <button id="refresh-history" type="button" class="secondary">刷新历史</button>
+    <p>历史凭证保存在当前浏览器。清除浏览器数据后会失去访问凭证。删除历史会关闭对应报告和关联分享。</p>
+    <div id="history"></div>
+    <button id="more-history" type="button" class="secondary" hidden>加载更多</button>
+  </section>
+</main>
+</body>
+</html>

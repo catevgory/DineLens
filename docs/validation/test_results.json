@@ -1,0 +1,627 @@
+{
+  "branch": "feature/yangyi",
+  "base_commit": "82ce8d976fe74a678c80d277168241520f713a22",
+  "main_tests_passed": 50,
+  "scoring_subtests_passed": 4,
+  "junit_reported_tests": 60,
+  "junit_testcase_nodes": 50,
+  "failures": 0,
+  "test_timestamp": "2026-11-14T00:53:00.018664-08:00",
+  "browser_e2e": "passed_with_fixed_collection_input_and_rules",
+  "test_environment": "Windows 11 Python 3.12.14 Edge headless",
+  "command": "DINELENS_BROWSER_TESTS=1 DINELENS_OLLAMA_TESTS=1 DINELENS_OLLAMA_URL=http://127.0.0.1:11435 python -m pytest -q --junitxml=var/validation/junit.xml",
+  "warning": "Starlette TestClient httpx deprecation warning",
+  "live_source_probe": {
+    "source": "amap",
+    "poi_id": "B023B09325",
+    "source_mode": "live",
+    "search_status": 200,
+    "search_candidates": 20,
+    "job_id": "49795f39264a4cfc995ab16f48952bda",
+    "status": "done",
+    "error": null,
+    "report_id": "report_49795f39264a4cfc995ab16f48952bda",
+    "counts": {
+      "duplicates": 0,
+      "flagged": 0,
+      "rating_eligible": 130,
+      "received": 200,
+      "rejected": 0,
+      "retained": 200,
+      "text_eligible": 200,
+      "unique": 200
+    },
+    "score": {
+      "effective_count": 1.366131487197628,
+      "method": "bayesian_time_v1",
+      "missing_dates": 0,
+      "parameters": {
+        "half_life_days": 180,
+        "prior_mean": 3.5,
+        "prior_strength": 10
+      },
+      "raw_mean": 3.769230769230769,
+      "sample_status": "adequate",
+      "scale_max": 5,
+      "scale_min": 1,
+      "valid_count": 130,
+      "value": 3.6169961380390965
+    },
+    "versions": {
+      "config": "score_defaults_v1",
+      "dataset": "356a17eb11b65c020c6bbe3d6e8785d3ae6c15fb2f396422391deda2fc2b2a5c",
+      "model": "ollama:qwen2.5:3b:aspects_v5_rules_v1",
+      "pipeline": "analysis-1.0.0"
+    },
+    "analysis_seconds": 351.7023913000012,
+    "report_source_mode": "live",
+    "history_count": 1,
+    "notification_count": 1,
+    "shared_report_status": 200,
+    "revoke_status": 204,
+    "after_revoke_status": 404,
+    "seconds": 403.86974929999997
+  },
+  "ollama_probe": {
+    "status": "passed",
+    "runtime": {
+      "version": "0.40.16"
+    },
+    "models": {
+      "models": [
+        {
+          "name": "qwen2.5:3b",
+          "model": "qwen2.5:3b",
+          "modified_at": "2026-11-14T00:04:02.3061866-08:00",
+          "size": 1929912432,
+          "digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+          "details": {
+            "parent_model": "",
+            "format": "gguf",
+            "family": "qwen2",
+            "families": [
+              "qwen2"
+            ],
+            "parameter_size": "3.1B",
+            "quantization_level": "Q4_K_M",
+            "context_length": 32768,
+            "embedding_length": 2048,
+            "runner": "ggml"
+          },
+          "capabilities": [
+            "completion",
+            "tools"
+          ]
+        }
+      ]
+    },
+    "samples_are_synthetic_smoke_tests": true,
+    "semantic_checks": [
+      {
+        "index": 0,
+        "passed": true
+      },
+      {
+        "index": 1,
+        "passed": true
+      },
+      {
+        "index": 2,
+        "passed": true
+      },
+      {
+        "index": 3,
+        "passed": true
+      },
+      {
+        "index": 4,
+        "passed": true
+      },
+      {
+        "index": 5,
+        "passed": true
+      }
+    ],
+    "samples": [
+      {
+        "text": "食物很好，但服务很慢。",
+        "assessment": {
+          "decision": "retained",
+          "reasons": [],
+          "spans": [
+            {
+              "aspect": "food",
+              "polarity": "positive",
+              "quote": "食物很好"
+            },
+            {
+              "aspect": "service",
+              "polarity": "negative",
+              "quote": "服务很慢"
+            }
+          ]
+        },
+        "seconds": 0.8611839000004693
+      },
+      {
+        "text": "等了一个小时，菜还是凉的，不会再来。",
+        "assessment": {
+          "decision": "retained",
+          "reasons": [],
+          "spans": [
+            {
+              "aspect": "service",
+              "polarity": "negative",
+              "quote": "等了一个小时"
+            },
+            {
+              "aspect": "food",
+              "polarity": "negative",
+              "quote": "菜还是凉的"
+            },
+            {
+              "aspect": "other",
+              "polarity": "negative",
+              "quote": "不会再来"
+            }
+          ]
+        },
+        "seconds": 1.5508050000007643
+      },
+      {
+        "text": "价格合理，环境干净，很满意。",
+        "assessment": {
+          "decision": "retained",
+          "reasons": [],
+          "spans": [
+            {
+              "aspect": "price",
+              "polarity": "positive",
+              "quote": "价格合理"
+            },
+            {
+              "aspect": "atmosphere",
+              "polarity": "positive",
+              "quote": "环境干净"
+            },
+            {
+              "aspect": "other",
+              "polarity": "positive",
+              "quote": "很满意"
+            }
+          ]
+        },
+        "seconds": 0.9726890000001731
+      },
+      {
+        "text": "我怀疑这家店在刷好评，服务很差。",
+        "assessment": {
+          "decision": "retained",
+          "reasons": [],
+          "spans": [
+            {
+              "aspect": "service",
+              "polarity": "negative",
+              "quote": "服务很差"
+            },
+            {
+              "aspect": "other",
+              "polarity": "negative",
+              "quote": "我怀疑这家店在刷好评"
+            }
+          ]
+        },
+        "seconds": 0.9360945000007632
+      },
+      {
+        "text": "Selling fake reviews. Contact our agency.",
+        "assessment": {
+          "decision": "flagged",
+          "reasons": [
+            "PROMOTIONAL_REVIEW_OFFER"
+          ],
+          "spans": [
+            {
+              "aspect": "other",
+              "polarity": "negative",
+              "quote": "Selling fake reviews",
+              "start": 0,
+              "end": 20
+            },
+            {
+              "aspect": "other",
+              "polarity": "unknown",
+              "quote": "Contact our agency",
+              "start": 22,
+              "end": 40
+            }
+          ]
+        },
+        "seconds": 0.006464399999458692
+      },
+      {
+        "text": "The food was not good and the staff ignored us.",
+        "assessment": {
+          "decision": "retained",
+          "reasons": [],
+          "spans": [
+            {
+              "aspect": "food",
+              "polarity": "negative",
+              "quote": "The food was not good"
+            },
+            {
+              "aspect": "service",
+              "polarity": "negative",
+              "quote": "the staff ignored us"
+            }
+          ]
+        },
+        "seconds": 0.7373886999994284
+      }
+    ],
+    "api_database_flow": {
+      "state": "done",
+      "error": null,
+      "report_id": "report_f3880f5e1f584262a2980a793605728f",
+      "versions": {
+        "config": "score_defaults_v1",
+        "dataset": "d465acb394dff22eafae63fcb57def394286adf483231d7a3d4520cae861871b",
+        "model": "ollama:qwen2.5:3b:aspects_v5_rules_v1",
+        "pipeline": "analysis-1.0.0"
+      },
+      "aspects": [
+        {
+          "aspect": "food",
+          "mixed": 0,
+          "negative": 0,
+          "neutral": 0,
+          "positive": 1,
+          "unknown": 0
+        },
+        {
+          "aspect": "service",
+          "mixed": 0,
+          "negative": 1,
+          "neutral": 0,
+          "positive": 0,
+          "unknown": 0
+        }
+      ],
+      "notifications": 1
+    }
+  },
+  "cases": [
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_bad_model_evidence_and_cancellation",
+      "seconds": 0.002
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_missing_and_invalid_ratings",
+      "seconds": 0.004
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_mixed_aspects_quotes_and_counts",
+      "seconds": 0.007
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_negation_and_legitimate_complaint",
+      "seconds": 0.001
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_ollama_adapter_validates_schema",
+      "seconds": 0.003
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_ollama_restores_long_source_quote_from_short_index",
+      "seconds": 0.002
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_ollama_retries_invalid_evidence_once",
+      "seconds": 0.001
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_ollama_uses_conservative_screening_and_preserves_complaints",
+      "seconds": 0.003
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_score_boundaries",
+      "seconds": 0.001
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_shrinkage_examples_and_time_decay",
+      "seconds": 0.0
+    },
+    {
+      "class": "backend.test_analysis.AnalysisTests",
+      "name": "test_unknown_scale_and_empty_input",
+      "seconds": 0.0
+    },
+    {
+      "class": "backend.test_browser.BrowserTests",
+      "name": "test_search_report_share_revoke_and_delete",
+      "seconds": 4.977
+    },
+    {
+      "class": "backend.test_cancel.QueuedCancelTests",
+      "name": "test_cancel_before_worker_starts",
+      "seconds": 0.001
+    },
+    {
+      "class": "backend.test_cancel.QueuedCancelTests",
+      "name": "test_cancel_queued_job_behind_running_job",
+      "seconds": 0.011
+    },
+    {
+      "class": "backend.test_cancel.RunningCancelTests",
+      "name": "test_cancel_after_done_is_rejected",
+      "seconds": 0.028
+    },
+    {
+      "class": "backend.test_cancel.RunningCancelTests",
+      "name": "test_cancel_while_analysing",
+      "seconds": 1.044
+    },
+    {
+      "class": "backend.test_cancel.RunningCancelTests",
+      "name": "test_cancel_while_collecting",
+      "seconds": 0.062
+    },
+    {
+      "class": "backend.test_cancel.RunningCancelTests",
+      "name": "test_unknown_job",
+      "seconds": 0.001
+    },
+    {
+      "class": "backend.test_evaluate.EvaluationTests",
+      "name": "test_configured_engine_sampling_and_zero_timing",
+      "seconds": 0.143
+    },
+    {
+      "class": "backend.test_evaluate.EvaluationTests",
+      "name": "test_model_failure_remains_visible_in_metrics",
+      "seconds": 0.01
+    },
+    {
+      "class": "backend.test_evaluate.EvaluationTests",
+      "name": "test_unclassified_predictions_count_as_misses",
+      "seconds": 0.0
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_completed_report_survives_restart",
+      "seconds": 0.278
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_csrf_origin_and_validation",
+      "seconds": 0.104
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_exclusive_worker_and_unconfigured_branch",
+      "seconds": 0.101
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_full_flow_ownership_sharing_and_deletion",
+      "seconds": 0.333
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_idempotency_and_read_only_polling",
+      "seconds": 0.279
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_model_failure_produces_no_report_or_history",
+      "seconds": 0.228
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_notification_api_ownership_csrf_and_read_state",
+      "seconds": 0.317
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_pipeline_cancellation_discards_report",
+      "seconds": 0.179
+    },
+    {
+      "class": "backend.test_integration.IntegrationTests",
+      "name": "test_recover_collected_checkpoint",
+      "seconds": 0.184
+    },
+    {
+      "class": "backend.test_local_model_live.LocalModelLiveTests",
+      "name": "test_real_aspects_quotes_and_legitimate_complaints",
+      "seconds": 4.556
+    },
+    {
+      "class": "backend.test_manage.ManageTests",
+      "name": "test_jsonl_cli",
+      "seconds": 0.014
+    },
+    {
+      "class": "backend.test_manage.ManageTests",
+      "name": "test_migrate_reports_actual_schema_version",
+      "seconds": 0.036
+    },
+    {
+      "class": "backend.test_manage.ManageTests",
+      "name": "test_operational_retry",
+      "seconds": 0.19
+    },
+    {
+      "class": "backend.test_pipeline.PipelineTests",
+      "name": "test_amap_login_redirect_keeps_browser_for_operator",
+      "seconds": 0.004
+    },
+    {
+      "class": "backend.test_pipeline.PipelineTests",
+      "name": "test_amap_search_fallback_keeps_challenge_handling",
+      "seconds": 0.004
+    },
+    {
+      "class": "backend.test_pipeline.PipelineTests",
+      "name": "test_amap_search_fallback_preserves_existing_candidates",
+      "seconds": 0.006
+    },
+    {
+      "class": "backend.test_pipeline.PipelineTests",
+      "name": "test_analysis_phase_cancel_and_done_conflict",
+      "seconds": 0.272
+    },
+    {
+      "class": "backend.test_pipeline.PipelineTests",
+      "name": "test_cancel_wins_over_inflight_model_failure",
+      "seconds": 0.169
+    },
+    {
+      "class": "backend.test_pipeline.PipelineTests",
+      "name": "test_existing_fetcher_receives_cancellation_callback",
+      "seconds": 0.002
+    },
+    {
+      "class": "backend.test_pipeline.PipelineTests",
+      "name": "test_fetcher_cancel_happens_before_browser_launch",
+      "seconds": 0.0
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_atomic_rollback",
+      "seconds": 0.09
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_bad_evidence_rejected_before_write",
+      "seconds": 0.068
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_existing_v1_database_migrates_without_losing_reports",
+      "seconds": 0.132
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_migration_replay_and_unique_completion",
+      "seconds": 0.097
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_notification_concurrent_polling_and_pagination",
+      "seconds": 0.219
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_notification_failure_does_not_rollback_report_and_retry_is_unique",
+      "seconds": 0.154
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_notifications_persist_read_state_and_disappear_with_report",
+      "seconds": 0.149
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_retention_and_checkpoint_expiry",
+      "seconds": 0.15
+    },
+    {
+      "class": "backend.test_storage.StorageTests",
+      "name": "test_revoke_and_delete",
+      "seconds": 0.171
+    }
+  ],
+  "changed_files": [
+    ".env.example",
+    ".gitignore",
+    "README.md",
+    "backend/README.md",
+    "backend/analysis.py",
+    "backend/app.py",
+    "backend/evaluate.py",
+    "backend/job_manager.py",
+    "backend/local_model.py",
+    "backend/manage.py",
+    "backend/migrations/001_initial.sql",
+    "backend/migrations/002_notifications.sql",
+    "backend/pipeline.py",
+    "backend/storage.py",
+    "backend/test_analysis.py",
+    "backend/test_browser.py",
+    "backend/test_evaluate.py",
+    "backend/test_integration.py",
+    "backend/test_local_model_live.py",
+    "backend/test_manage.py",
+    "backend/test_pipeline.py",
+    "backend/test_storage.py",
+    "docs/api_examples.md",
+    "docs/personal_delivery.md",
+    "docs/validation/README.md",
+    "docs/validation/evaluation.json",
+    "docs/validation/ollama_evaluation.json",
+    "docs/validation/test_results.json",
+    "fetchers/browser_fetch.py",
+    "pytest.ini",
+    "requirements-dev.txt",
+    "requirements.txt",
+    "web/README.md",
+    "web/analysis.html",
+    "web/analysis.js",
+    "web/api.js",
+    "web/index.html",
+    "web/jobs-demo.html",
+    "web/report.html",
+    "web/report.js",
+    "web/reports.css"
+  ],
+  "model_subtests_passed": 6,
+  "model_browser_e2e": "passed_with_fixed_collection_input_and_real_qwen_model",
+  "live_search_probe": {
+    "status": "passed",
+    "candidates": 20,
+    "target": [
+      {
+        "source": "amap",
+        "id": "B023B09325",
+        "name": "楼外楼(杭州西湖风景名胜区店)",
+        "address": "西湖街道孤山路30号(近平湖秋月)",
+        "city": "杭州市",
+        "district": null,
+        "location": null,
+        "tel": "",
+        "rating": "3.7",
+        "cost": null,
+        "tag": ""
+      }
+    ]
+  },
+  "annotation_input": {
+    "records": 200,
+    "report_id": "report_49795f39264a4cfc995ab16f48952bda",
+    "sha256": "a5e7cdf3e41d0b511cf51662e804631f08e695c9c1439f2eb9423d553222ef35",
+    "status": "unlabelled",
+    "content_normalization": "NFKC and collapsed whitespace",
+    "prediction_labels_included": false
+  },
+  "model_sentiment_evaluation": {
+    "version": "ollama:qwen2.5:3b:aspects_v5_rules_v1",
+    "records": 1000,
+    "agreement": 0.97,
+    "negative_recall": 0.966,
+    "errors": 0,
+    "seconds": 430.64908300000025,
+    "artifact": "docs/validation/ollama_evaluation.json"
+  }
+}

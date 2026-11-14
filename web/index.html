@@ -23,6 +23,7 @@
   <h1>DineLens</h1>
   <p>前端托管在 Cloudflare Pages · 后端通过隧道连接家里的电脑</p>
   <button onclick="testBackend()">测试后端连通</button>
+  <a class="link-button" href="analysis.html">分析餐厅评论与查看历史</a>
   <a class="link-button secondary" href="jobs-demo.html">任务与取消演示</a>
   <div id="result">未测试</div>
 
@@ -31,7 +32,7 @@ async function testBackend() {
   const el = document.getElementById('result');
   el.textContent = '请求中...';
   try {
-    const resp = await fetch('/api/', { cache: 'no-store' });
+    const resp = await fetch(location.pathname.startsWith('/web/') ? '/' : '/api/', { cache: 'no-store' });
     const text = await resp.text();
     el.textContent = '后端返回: HTTP ' + resp.status + '\n' + text.slice(0, 300);
   } catch (err) {

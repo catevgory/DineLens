@@ -18,7 +18,10 @@ DineLens/
 │   └── api/
 │       └── [[path]].js         # /api/*  ->  $BACKEND_URL/*
 └── web/                        # Pages build output directory
-    ├── index.html              # placeholder frontend (replace with the real app)
+    ├── index.html              # entry links and backend health check
+    ├── analysis.html           # branch search, analysis and private history
+    ├── report.html             # report evidence and read-only sharing
+    ├── api.js                  # owner session and CSRF handoff
     └── jobs-demo.html          # minimal job list + three-stage cancel demo
 ```
 
@@ -59,6 +62,8 @@ DineLens/
   strips the `/api` prefix, so the FastAPI app exposes `/jobs` and
   `/jobs/{id}/cancel`. The frontend uses relative paths (`/api/...`) and does not
   need to know about the tunnel at all.
-- `jobs-demo.html` can also be opened directly from disk for local development.
-  It then defaults to `http://127.0.0.1:8000`, and the API address can be changed
-  in the page.
+- The authenticated `jobs-demo.html` is served from `http://127.0.0.1:8000/web/jobs-demo.html`
+  during local development. Use `/web/analysis.html` to confirm a branch before
+  creating an analysis job. API requests use an anonymous HttpOnly cookie and
+  CSRF token via `api.js`. Configure `DINELENS_ORIGINS` for the Pages domain and
+  `DINELENS_COOKIE_SECURE=true` for HTTPS deployment.

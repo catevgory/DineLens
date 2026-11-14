@@ -131,6 +131,7 @@
   </section>
 </main>
 
+<script src="api.js"></script>
 <script>
 const ACTIVE = new Set(['queued', 'collecting', 'analysing']);
 const LABELS = {
@@ -155,7 +156,7 @@ let polling = false;
 let timer = null;
 
 function defaultApiBase() {
-  return location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '/api';
+  return location.pathname.startsWith('/web/') ? '' : '/api';
 }
 
 function readSavedApi() {
@@ -166,32 +167,16 @@ function saveApi(value) {
   try { localStorage.setItem('dinelens-api', value); } catch { /* file:// may block storage */ }
 }
 
-function apiUrl(path) {
-  return apiInput.value.replace(/\/+$/, '') + path;
-}
-
 function say(text, error = false) {
   message.textContent = text;
   message.style.color = error ? '#a33a3a' : '';
 }
 
+let apiClient = null;
 async function request(method, path, body) {
-  const options = { method, cache: 'no-store', headers: {} };
-  if (body !== undefined) {
-    options.headers['content-type'] = 'application/json';
-    options.body = JSON.stringify(body);
-  }
-  const resp = await fetch(apiUrl(path), options);
-  const text = await resp.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
-  if (!resp.ok) {
-    const detail = data && data.detail ? data.detail : 'HTTP ' + resp.status;
-    const err = new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-    err.status = resp.status;
-    throw err;
-  }
-  return data;
+  const base = apiInput.value.replace(/\/+$/, '');
+  if (!apiClient || apiClient.base !== base) apiClient = new DineLensClient(base);
+  return apiClient.request(path, { method, body });
 }
 
 function el(tag, props = {}, children = []) {

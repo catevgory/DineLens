@@ -22,7 +22,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode, urlsplit
 
 from .common import UA, append_jsonl, ensure_dir, save_csv, save_json
 
@@ -51,6 +51,7 @@ REVIEW_COLUMNS = [
 AMAP_HOME = "https://www.amap.com/"
 AMAP_DETAIL_URL = "https://www.amap.com/detail/{poi_id}"
 AMAP_SEARCH_URL = "https://www.amap.com/search?query={kw}&city={city}"
+AMAP_SEARCH_API_URL = "https://www.amap.com/service/poiInfo"
 AMAP_DIRECT_URLS = ["https://www.amap.com/detail/get/detail?id={poi_id}"]
 # 高德网页版评论模块已被官方注释掉，但接口仍可用：
 # 前端源码 detail.comment.js 里 detail.service.reviewList + poiid/pagenum/pagesize/select_mode
@@ -567,6 +568,18 @@ def search_amap(keyword, city_code, out_dir, headed=False, profile_dir=None, cha
             page.mouse.wheel(0, 2000)
             page.wait_for_timeout(1200)
         captured.extend(cap)
+        if not _extract_poi_list(captured):
+            # The SSR map can fail to initialize when its JSAPI assets fail.
+            # Reuse the same authenticated browser context for POI lookup.
+            query_url = AMAP_SEARCH_API_URL + "?" + urlencode({
+                "query_type": "TQUERY", "city": city_code or "", "keywords": keyword})
+            response = session.context.request.get(query_url, headers={"Referer": search_url}, timeout=20000)
+            if not response.ok:
+                raise RuntimeError(f"高德地点查询失败，HTTP {response.status}")
+            data = response.json()
+            if _needs_recaptcha(data):
+                data = _goto_json(page, query_url, headed, out_dir, home_url=AMAP_HOME)
+            captured.append({"url": query_url, "body": data})
         page.remove_listener("response", handler)
     save_json(out_dir / "raw" / "amap_search_responses.json", captured)
     rows = [_amap_poi_row(poi) for poi in _extract_poi_list(captured)]
@@ -576,7 +589,25 @@ def search_amap(keyword, city_code, out_dir, headed=False, profile_dir=None, cha
     return rows
 
 
-def fetch_amap(poi_id, out_dir, headed=False, max_scroll=8, profile_dir=None, channel="auto"):
+def _open_amap_detail(page, detail_url, headed, out_dir):
+    """Keep the browser available when AMap redirects to its sign-in page."""
+    for attempt in range(2):
+        try:
+            page.goto(detail_url, wait_until="domcontentloaded", timeout=60000)
+        except Exception as exc:
+            if "interrupted by another navigation" not in str(exc):
+                raise
+            page.wait_for_load_state("domcontentloaded", timeout=60000)
+        if urlsplit(page.url).hostname != "id.amap.com":
+            return
+        if attempt == 0:
+            _risk_help(headed, out_dir, page=page)
+    raise RuntimeError("高德仍要求登录，请在浏览器中完成登录后重试。")
+
+
+def fetch_amap(poi_id, out_dir, headed=False, max_scroll=8, profile_dir=None, channel="auto", cancel_check=None):
+    cancel_check = cancel_check or (lambda: None)
+    cancel_check()
     if not poi_id:
         raise SystemExit("缺少 --poi-id")
     out_dir = ensure_dir(Path(out_dir))
@@ -585,17 +616,18 @@ def fetch_amap(poi_id, out_dir, headed=False, max_scroll=8, profile_dir=None, ch
         page = session.page
         detail_url = AMAP_DETAIL_URL.format(poi_id=poi_id)
         cap, handler = _attach_capture(page, r"amap\.com")
-        page.goto(detail_url, wait_until="domcontentloaded", timeout=60000)
+        _open_amap_detail(page, detail_url, headed, out_dir)
         page.wait_for_timeout(3000)
         if _wait_risk(page, 15) or _detect_risk(page):
             _risk_help(headed, out_dir, page=page)
-            page.goto(detail_url, wait_until="domcontentloaded", timeout=60000)
+            _open_amap_detail(page, detail_url, headed, out_dir)
             page.wait_for_timeout(4000)
         page.remove_listener("response", handler)
         captured.extend(cap)
 
         fetched_pages = 0
         for pagenum in range(1, max(1, max_scroll) + 1):
+            cancel_check()
             url = AMAP_REVIEW_URL.format(poi_id=poi_id, page=pagenum)
             try:
                 resp = session.context.request.get(
@@ -603,8 +635,10 @@ def fetch_amap(poi_id, out_dir, headed=False, max_scroll=8, profile_dir=None, ch
                 )
                 data = resp.json()
             except Exception as exc:
+                cancel_check()
                 print(f"[warn] 第 {pagenum} 页评论请求失败: {exc}")
                 break
+            cancel_check()
             captured.append({"url": url, "body": data})
             if str(data.get("status")) != "1":
                 print(
@@ -632,6 +666,7 @@ def fetch_amap(poi_id, out_dir, headed=False, max_scroll=8, profile_dir=None, ch
                     print(f"[warn] 直接请求 {url} 失败: {exc}")
     save_json(out_dir / "raw" / "captured.json", captured)
     rows = _collect(captured, "amap", poi_id, poi_id)
+    cancel_check()
     _write_outputs(out_dir, rows)
     return rows
 
@@ -666,7 +701,10 @@ def fetch_baidu(
     xy=(None, None),
     profile_dir=None,
     channel="auto",
+    cancel_check=None,
 ):
+    cancel_check = cancel_check or (lambda: None)
+    cancel_check()
     if not uid:
         raise SystemExit("缺少 --uid")
     out_dir = ensure_dir(Path(out_dir))
@@ -701,6 +739,7 @@ def fetch_baidu(
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
                     page.wait_for_timeout(4000)
                 for _ in range(max(1, max_pages)):
+                    cancel_check()
                     page.mouse.wheel(0, 2000)
                     page.wait_for_timeout(1200)
                     for text in ("查看全部评论", "全部评论", "评论"):
@@ -714,22 +753,27 @@ def fetch_baidu(
                             pass
                 page.wait_for_timeout(1500)
             except Exception as exc:
+                cancel_check()
                 print(f"[warn] 打开百度 POI 页面失败: {exc}")
         page.remove_listener("response", handler)
         captured.extend(cap)
 
         for template in BAIDU_UGC_URLS:
             for pageno in range(max(1, max_pages)):
+                cancel_check()
                 url = template.format(uid=uid, page=pageno)
                 try:
                     data = _goto_json(page, url, headed, out_dir, home_url=BAIDU_HOME)
                 except Exception as exc:
+                    cancel_check()
                     print(f"[warn] {url} -> {exc}")
                     break
+                cancel_check()
                 captured.append({"url": url, "body": data})
                 if not extract_reviews(data):
                     break
     save_json(out_dir / "raw" / "captured.json", captured)
     rows = _collect(captured, "baidu", name or uid, uid)
+    cancel_check()
     _write_outputs(out_dir, rows)
     return rows

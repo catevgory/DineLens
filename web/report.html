@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>DineLens 分析报告</title>
+  <link rel="stylesheet" href="reports.css">
+  <script src="api.js" defer></script>
+  <script src="report.js" defer></script>
+</head>
+<body><main>
+  <nav><a href="analysis.html">餐厅分析与历史</a></nav>
+  <h1>餐厅分析报告</h1>
+  <p id="status" role="status">正在读取报告。</p>
+  <div id="report"></div>
+  <section id="sharing" hidden>
+    <h2>分享报告</h2>
+    <p>持有链接的人可以只读查看本报告。你可以撤销后续访问。</p>
+    <button id="create-share" type="button">创建分享链接</button>
+    <p id="share-result"></p>
+    <div id="share-list"></div>
+  </section>
+</main></body>
+</html>

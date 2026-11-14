@@ -48,7 +48,7 @@ Restaurant name + city
 - Sessions are established by driving a real browser via **Playwright** with a persistent profile directory. All JSON responses seen by the page are intercepted and stored verbatim under `raw/` so results can be audited and re-parsed later.
 - **Risk-control handling**: the program detects slider/login challenges (including ones rendered inside iframes), waits for manual completion when running in headed mode, then reuses the verified session for subsequent requests.
 - Pagination follows `page_total` until exhausted; collected reviews are de-duplicated by `review_id`, with `(text, author, time)` as a fallback key.
-- A Baidu Place API wrapper is included for store metadata. Manual import is planned as a fallback for stores that have no public data on any source.
+- A Baidu Place API wrapper is included for store metadata. Manual review import remains deferred. Existing normalized JSONL outputs can be processed through the analysis CLI.
 
 ### 3. Storage and output
 
@@ -61,26 +61,27 @@ Each run writes to `out/<timestamp>-<store>/`:
 
 Normalized review fields: `source, store, poi_id, author, rating, date, content, url`. The `.jsonl` file is the input format for the analysis stage.
 
-### 4. Analysis engine (planned, uses the `.jsonl` output)
+### 4. Analysis engine
 
-- A **local** open-source language model (e.g. Qwen via Ollama) performs:
+- `backend/analysis.py` consumes the existing normalized review dictionaries or `.jsonl` output. The default rules mode uses explicit promotional signals, English VADER and a Chinese domain lexicon. Local Ollama mode accepts a configured open-source model and validates its structured output. The pipeline provides:
   - ad / malicious / fake review screening with reasons;
   - positive/negative classification;
   - aspect tagging (food, service, price, atmosphere);
   - extractive summarization — the model may only quote original review text, never write new reviews.
 
-### 5. Scoring (planned)
+### 5. Scoring
 
 - Reviews that fail screening are excluded. The score combines:
   - **Bayesian weighted average** to correct small-sample distortion;
   - **Wilson interval** on the negative-review rate for confidence bounding;
   - **exponential time decay** so recent reviews weigh more.
 - The report shows sample size, rating distribution, representative quotes, and what drives the score.
+- The implemented default is `bayesian_time_v1`. Wilson bounds are reported separately for the negative-review rate. Zero valid ratings produce a null score, and 1–4 ratings carry a low-sample warning. Mean-only and Bayesian-only modes support comparison.
 
 ### 6. Web application (in progress)
 
-- A minimal FastAPI job service lives in `backend/`: one background worker, an in-memory job store, and cooperative cancellation while queued, collecting or analysing. Collection and analysis are still simulated.
-- The full UI, report pages and deployment wiring are planned. See [`backend/README.md`](backend/README.md) for the API contract and integration notes.
+- The FastAPI service in `backend/` connects the existing collectors to analysis and SQLite persistence. The single-worker queue supports cooperative cancellation while queued, collecting or analysing, checkpoint recovery, private history and revocable read-only sharing.
+- Open `/web/analysis.html` on the local backend, or `analysis.html` on Pages. See [`backend/README.md`](backend/README.md) for session/CSRF handoff, configuration and API details, and [`docs/personal_delivery.md`](docs/personal_delivery.md) for validation and remaining external dependencies.
 
 ### 7. Tunnel tooling (`tools/`)
 
@@ -153,23 +154,23 @@ To run the minimal job service and the cancellation demo:
 python -m uvicorn backend.app:app --reload --port 8000
 ```
 
-Then open `web/jobs-demo.html` (or `http://127.0.0.1:8000/docs`). Jobs can be cancelled while queued, collecting or analysing; a cancelled job produces no report or history entry.
+Then open `http://127.0.0.1:8000/web/analysis.html` or `/docs`. `jobs-demo.html` continues to list and cancel owned jobs. Browser pages use an anonymous cookie and CSRF token, handled by `web/api.js`.
 
 ## Roadmap
 
 - **Phase 1 — Data pipeline** (done): search, collection, de-duplication, export.
-- **Phase 2 — Analysis engine**: LLM screening, classification, summarization.
-- **Phase 3 — Scoring & report**: weighted score, explainable report content.
-- **Phase 4 — Web application** (in progress): minimal job queue and three-stage cancellation in `backend/`; full UI, report pages and deployment still pending.
+- **Phase 2 — Analysis engine**: rules and Ollama integration implemented, with conservative screening, constrained source quotations and real-model regression tests. Public sentiment benchmark results are recorded in `docs/validation/`. Screening quality evaluation awaits independently annotated reviews.
+- **Phase 3 — Scoring & report**: weighted scoring, uncertainty bounds and explainable report pages implemented.
+- **Phase 4 — Web application**: persistent jobs, three-stage cancellation, private history and controlled sharing integrated. Live source verification, production deployment and independent screening evaluation remain team integration work.
 
 ## Data & Compliance
 
 - Collected data (which contains personal information such as review authors) is deliberately **not** committed to this repository; runtime output, browser profiles and local configuration are git-ignored.
-- The tool is intended for personal use with low-frequency collection, and provides a manual import path for stores whose data cannot be collected automatically.
+- The tool is intended for personal use with low-frequency collection. Its analysis CLI can process the normalized JSONL files produced by the collectors.
 - Anyone reusing this code is responsible for complying with the terms of the data sources and applicable laws.
 
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE).
 
-Built with open-source components including [Playwright](https://playwright.dev), [cloudflared](https://developers.cloudflare.com/cloudflare-one/), and open-source LLMs (planned).
+Built with open-source components including [Playwright](https://playwright.dev), [cloudflared](https://developers.cloudflare.com/cloudflare-one/), VADER, and configurable local models through Ollama.
