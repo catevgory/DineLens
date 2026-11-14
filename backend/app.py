@@ -15,8 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictBool
 
 from .job_manager import JobManager, NeedsOperator
-from .pipeline import Collector, configured_engine, search_branches
+from .logging_setup import configure_logging
+from .pipeline import Collector, configured_analyser, search_branches
+from .settings import Settings
 from .storage import Storage, iso, token_hash
+
+configure_logging("backend")
 
 COOKIE = "dinelens_owner"
 
@@ -42,6 +46,12 @@ class JobView(BaseModel):
     report_id: str | None = None
 
 
+class SettingsUpdate(BaseModel):
+    llm_enabled: StrictBool
+    llm_model: str | None = Field(default=None, max_length=200)
+    llm_url: str | None = Field(default=None, max_length=500)
+
+
 def create_app(*, database_path=None, collector=None, engine=None, searcher=None, origins=None):
     allowed = origins or os.getenv("DINELENS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000").split(",")
     allowed = [value.strip() for value in allowed if value.strip()]
@@ -49,6 +59,7 @@ def create_app(*, database_path=None, collector=None, engine=None, searcher=None
     secure_cookie = os.getenv("DINELENS_COOKIE_SECURE", secure_default).lower() == "true"
     session_requests = defaultdict(deque)
     session_lock = threading.Lock()
+    settings = Settings()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -56,8 +67,8 @@ def create_app(*, database_path=None, collector=None, engine=None, searcher=None
                           share_days=int(os.getenv("DINELENS_SHARE_DAYS", "30")),
                           raw_days=int(os.getenv("DINELENS_RAW_DAYS", "90")),
                           report_days=int(os.getenv("DINELENS_REPORT_DAYS", "365")))
-        analyser = engine or configured_engine()
-        manager = JobManager(storage=storage, collector=collector or Collector(), analyser=analyser.analyse)
+        analyser = engine.analyse if engine is not None else configured_analyser(settings)
+        manager = JobManager(storage=storage, collector=collector or Collector(), analyser=analyser)
         app.state.storage, app.state.manager = storage, manager
         manager.start_worker()
         try:
@@ -66,9 +77,10 @@ def create_app(*, database_path=None, collector=None, engine=None, searcher=None
             manager.shutdown(timeout=3)
 
     app = FastAPI(title="DineLens", version="1.0.0", lifespan=lifespan)
+    app.state.settings = settings
     app.add_middleware(CORSMiddleware, allow_origins=allowed, allow_credentials=True,
-                       allow_methods=["GET", "POST", "DELETE"],
-                       allow_headers=["Content-Type", "X-CSRF-Token", "Idempotency-Key", "Authorization"])
+                       allow_methods=["GET", "POST", "DELETE", "PUT"],
+                       allow_headers=["Content-Type", "X-CSRF-Token", "Idempotency-Key", "Authorization", "X-Admin-Token"])
 
     @app.middleware("http")
     async def private_responses(request, call_next):
@@ -100,9 +112,39 @@ def create_app(*, database_path=None, collector=None, engine=None, searcher=None
             raise HTTPException(404, "Resource is not available")
         return value
 
+    def admin(x_admin_token: str | None = Header(default=None)):
+        expected = os.getenv("DINELENS_ADMIN_TOKEN", "").strip()
+        if not expected:
+            raise HTTPException(403, "Admin token is not configured.")
+        if not x_admin_token or not secrets.compare_digest(x_admin_token, expected):
+            raise HTTPException(403, "Invalid admin token.")
+        return True
+
     @app.get("/")
     def health():
         return {"service": "dinelens-jobs", "status": "ok", "version": "1.0.0"}
+
+    @app.get("/status")
+    def status(request: Request):
+        manager = getattr(request.app.state, "manager", None)
+        if manager is None:
+            raise HTTPException(503, "Worker is not ready")
+        return {"service": "dinelens-jobs", "status": "ok", "version": "1.0.0",
+                **manager.status()}
+
+    @app.get("/settings")
+    def get_settings(request: Request, _=Depends(admin)):
+        return request.app.state.settings.as_dict()
+
+    @app.put("/settings")
+    def put_settings(payload: SettingsUpdate, request: Request, _=Depends(admin)):
+        if payload.llm_url is not None and not payload.llm_url.startswith(("http://", "https://")):
+            raise HTTPException(422, "llm_url must start with http:// or https://")
+        return request.app.state.settings.update(
+            llm_enabled=payload.llm_enabled,
+            llm_model=payload.llm_model,
+            llm_url=payload.llm_url,
+        )
 
     @app.post("/owner-session")
     def create_session(request: Request, response: Response):

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DineLens Control Panel</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">D</div>
+      <div>
+        <h1>DineLens</h1>
+        <p>Control Panel · local only</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="last-refresh" class="muted">--</span>
+      <button id="refresh" class="ghost" type="button">刷新</button>
+      <button id="logout" class="ghost" type="button" hidden>退出</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="status-grid" id="status-grid" aria-live="polite"></section>
+
+    <section class="panel" id="settings-panel">
+      <div class="panel-head">
+        <h2>LLM 配置</h2>
+        <span id="settings-source" class="hint"></span>
+      </div>
+      <form id="llm-form">
+        <label class="switch-row">
+          <input type="checkbox" id="llm-enabled">
+          启用本地模型处理 uncertain 评论
+        </label>
+        <div class="form-row">
+          <label for="llm-model">模型</label>
+          <input id="llm-model" list="model-list" placeholder="从 Ollama 列表选择模型" autocomplete="off">
+          <datalist id="model-list"></datalist>
+        </div>
+        <div class="form-row">
+          <label for="llm-url">Ollama URL</label>
+          <input id="llm-url" placeholder="http://127.0.0.1:11434" autocomplete="off">
+        </div>
+        <div class="actions">
+          <button type="submit">保存设置</button>
+          <button type="button" id="test-llm" class="secondary">测试模型</button>
+        </div>
+        <p class="hint">关闭后，规则无法确定的评论会被排除，不进入评分和报告。保存只影响之后创建的任务。</p>
+        <pre id="llm-result" class="result" hidden></pre>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>任务错误</h2>
+        <button id="refresh-errors" class="ghost" type="button">刷新</button>
+      </div>
+      <div id="job-errors" class="table-wrap">
+        <p class="muted">加载中...</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>日志</h2>
+        <div class="log-controls">
+          <div class="tabs" id="log-tabs">
+            <button type="button" data-source="backend" class="active">后端</button>
+            <button type="button" data-source="tunnel">隧道</button>
+            <button type="button" data-source="admin">Admin</button>
+          </div>
+          <select id="log-lines" aria-label="日志行数">
+            <option value="100">100 行</option>
+            <option value="300" selected>300 行</option>
+            <option value="1000">1000 行</option>
+          </select>
+          <label class="check"><input type="checkbox" id="log-auto" checked> 自动刷新</label>
+          <input id="log-filter" type="text" placeholder="过滤...">
+          <button id="log-copy" class="ghost" type="button">复制</button>
+          <button id="log-download" class="ghost" type="button">下载</button>
+        </div>
+      </div>
+      <div class="log-meta" id="log-meta"></div>
+      <pre id="log-output" class="log-output">加载中...</pre>
+    </section>
+  </main>
+
+  <div id="token-modal" class="modal" hidden>
+    <form id="token-form" class="modal-card">
+      <h2>输入 Admin Token</h2>
+      <p>控制面板需要 <code>DINELENS_ADMIN_TOKEN</code>。它只保存在当前浏览器会话，不写入磁盘。</p>
+      <input id="token-input" type="password" autocomplete="off" placeholder="Admin token">
+      <div class="actions">
+        <button type="submit">进入</button>
+      </div>
+      <p id="token-error" class="error"></p>
+    </form>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/static/admin.js"></script>
+</body>
+</html>

@@ -7,10 +7,14 @@ const container = document.getElementById('report');
 const aspectLabels = { food: '食物', service: '服务', price: '价格', atmosphere: '环境', other: '其他' };
 const polarityLabels = { positive: '正面', negative: '负面', mixed: '褒贬并存', neutral: '中性', unknown: '未确定' };
 const methodLabels = { mean_v1: '平均分', bayesian_v1: '考虑样本量', bayesian_time_v1: '考虑样本量与评论时间' };
-const reasonLabels = { PROMOTIONAL_REVIEW_OFFER: '评论推广或有偿评价邀约', NO_TEXT: '无可分析正文' };
+const reasonLabels = { PROMOTIONAL_REVIEW_OFFER: '评论推广或有偿评价邀约', NO_TEXT: '无可分析正文',
+  NO_CLEAR_SENTIMENT: '规则无法确定情感', LLM_DISABLED: 'LLM 未启用', LLM_UNAVAILABLE: 'LLM 不可用',
+  SUSPICIOUS_PROMOTION: '疑似代写/刷评邀约', MODEL_FLAGGED: '模型判定为可疑' };
 const warningLabels = { LOW_RATING_SAMPLE: '有效评分少于 5 条，分数受样本量限制。', NO_NUMERIC_RATINGS: '没有可用于计算的数字评分。',
   NO_USABLE_TEXT: '没有可用于生成摘要的评论文本。', NO_USABLE_EVIDENCE: '本次数据没有可用的评分或文本证据。',
-  EVIDENCE_EXPIRED: '原文证据已到期，引用停止展示。', REJECTED_SOURCE_RECORDS: '部分记录因分店或来源不匹配被排除。' };
+  EVIDENCE_EXPIRED: '原文证据已到期，引用停止展示。', REJECTED_SOURCE_RECORDS: '部分记录因分店或来源不匹配被排除。',
+  UNCERTAIN_REVIEWS_EXCLUDED: '部分评论无法由规则确定，已从报告中排除。',
+  LLM_DISABLED: 'LLM 未启用，未判定评论已排除。', LLM_UNAVAILABLE: 'LLM 不可用，未判定评论已排除。' };
 
 function element(tag, text) {
   const node = document.createElement(tag);
@@ -24,7 +28,8 @@ function render(report) {
   overview.append(element('h2', report.branch.name || '餐厅'), element('p', [report.branch.city, report.branch.address].filter(Boolean).join(' · ')));
   overview.append(element('p', report.score.value === null ? '综合分暂无数据' : report.score.value.toFixed(2) + ' / 5'));
   overview.lastChild.className = 'score';
-  overview.append(element('p', '有效评分 ' + report.score.valid_count + ' 条 · 保留评论 ' + report.counts.retained + ' 条 · 标记可疑 ' + report.counts.flagged + ' 条'));
+  overview.append(element('p', '有效评分 ' + report.score.valid_count + ' 条 · 保留评论 ' + report.counts.retained + ' 条 · 标记可疑 ' + report.counts.flagged + ' 条'
+    + (report.counts.uncertain ? ' · 未判定排除 ' + report.counts.uncertain + ' 条' : '')));
   overview.append(element('small', '评分方法 ' + (methodLabels[report.score.method] || report.score.method) + ' · 分析时间 ' + new Date(report.generated_at).toLocaleString()));
   overview.append(element('p', '评分分布 ' + (Object.entries(report.rating_distribution || {}).map(([score, count]) => score + ' 分 ' + count + ' 条').join('，') || '暂无数字评分')));
   if (report.score.raw_mean !== null) overview.append(element('p', '原始平均分 ' + report.score.raw_mean.toFixed(2) + '。综合分考虑样本量' + (report.score.method === 'bayesian_time_v1' ? '和评论时间。' : '。')));
@@ -40,7 +45,8 @@ function render(report) {
   }
   const interval = report.negative_rate_interval;
   if (interval) overview.append(element('p', '已分类正负面评论中的负面比例 95% Wilson 区间 ' + (interval.lower * 100).toFixed(1) + '%–' + (interval.upper * 100).toFixed(1) + '%'));
-  overview.append(element('p', '分析版本 ' + report.versions.pipeline + ' · 模型或规则 ' + report.versions.model));
+  overview.append(element('p', '分析版本 ' + report.versions.pipeline + ' · 模型或规则 ' + report.versions.model
+    + (report.versions.screening ? ' · 筛查 ' + report.versions.screening : '')));
   container.append(overview);
 
   const aspects = element('section');

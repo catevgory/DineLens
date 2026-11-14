@@ -21,11 +21,23 @@ ASPECTS = {
     "atmosphere": ("atmosphere", "ambience", "decor", "noisy", "quiet", "环境", "氛围", "安静", "吵"),
 }
 POSITIVE = ("很好", "好吃", "美味", "新鲜", "友好", "热情", "干净", "舒适", "便宜", "实惠", "安静", "不错", "满意", "很棒", "好", "great", "good", "delicious", "fresh", "friendly", "clean", "comfortable", "affordable", "cheap", "excellent", "amazing", "tasty", "lovely", "love")
-NEGATIVE = ("难吃", "很差", "糟糕", "失望", "冷", "慢", "脏", "贵", "吵", "差", "bad", "awful", "terrible", "disappointing", "slow", "rude", "dirty", "expensive", "overpriced", "noisy", "cold", "bland", "stale", "hate")
+NEGATIVE = ("难吃", "很差", "糟糕", "失望", "冷", "慢", "脏", "贵", "吵", "差", "凉的", "凉了", "菜凉", "等了", "等太久", "等很久", "不会再来", "再也不来", "不想再来", "bad", "awful", "terrible", "disappointing", "slow", "rude", "dirty", "expensive", "overpriced", "noisy", "cold", "bland", "stale", "hate")
 BREAKS = re.compile(r"[.!?。！？,，;；\n]+|\b(?:but|however|and)\b|但是|不过|但", re.I)
 PROMOTION = re.compile(
     r"^(?:selling|sell|we sell|we offer|buy)\s+(?:fake\s+|positive\s+|5[- ]star\s+)?reviews?\b.{0,200}(?:contact|whatsapp|telegram|dm us)"
     r"|^(?:刷好评|出售好评|有偿好评|五星好评返现).{0,100}(?:微信|联系|咨询|下单)", re.I)
+# A review-manipulation term plus a contact/offer term in the same sentence.
+# This is deliberately only a *route* to the LLM, not an automatic flag:
+# legitimate complaints that mention fake reviews should still be retained.
+PROMOTION_ROUTE = re.compile(
+    r"(?:写|代写|刷|买卖|招)[^。！？\n]{0,12}(?:好评|评论|评价)[^。！？\n]{0,80}"
+    r"(?:微信|加v|返现|联系|私聊|下单|兼职|招聘|whatsapp|telegram|dm|contact)"
+    r"|(?:微信|加v|返现|联系|私聊|下单|兼职|招聘|whatsapp|telegram|dm|contact)"
+    r"[^。！？\n]{0,80}(?:写|代写|刷|买卖|招)[^。！？\n]{0,12}(?:好评|评论|评价)"
+    r"|(?:write|post|sell|buy|paid)[^.!?\n]{0,20}reviews?[^.!?\n]{0,80}"
+    r"(?:contact|whatsapp|telegram|dm|wechat)",
+    re.I,
+)
 
 
 def normalized_text(text):
@@ -99,8 +111,17 @@ def rule_assessment(text):
                 spans.append({"aspect": aspect, "polarity": sentiment(quote), "quote": quote,
                               "start": left + offset, "end": left + offset + len(quote)})
     flagged = bool(PROMOTION.search(text))
-    return {"decision": "flagged" if flagged else "retained",
-            "reasons": ["PROMOTIONAL_REVIEW_OFFER"] if flagged else [], "spans": spans}
+    if flagged:
+        return {"decision": "flagged", "reasons": ["PROMOTIONAL_REVIEW_OFFER"], "spans": spans}
+    no_clear = bool(text and spans and not any(s["polarity"] in {"positive", "negative", "neutral"} for s in spans))
+    if PROMOTION_ROUTE.search(text):
+        reasons = ["SUSPICIOUS_PROMOTION"]
+        if no_clear:
+            reasons.append("NO_CLEAR_SENTIMENT")
+        return {"decision": "uncertain", "reasons": reasons, "spans": spans}
+    if no_clear:
+        return {"decision": "uncertain", "reasons": ["NO_CLEAR_SENTIMENT"], "spans": spans}
+    return {"decision": "retained", "reasons": [], "spans": spans}
 
 
 def parse_date(value):
@@ -187,17 +208,19 @@ def wilson_interval(negative, total, z=1.96):
 
 
 class AnalysisEngine:
-    def __init__(self, assessor=None, model_version="vader3.3.2_zh_domain_v1", score_method="bayesian_time_v1"):
+    def __init__(self, assessor=None, model_version="vader3.3.2_zh_domain_v1", score_method="bayesian_time_v1",
+                 screening_mode="rules"):
         if score_method not in {"mean_v1", "bayesian_v1", "bayesian_time_v1"}:
             raise ValueError("Unknown scoring method")
         self.assessor = assessor or rule_assessment
         self.model_version = model_version
         self.score_method = score_method
+        self.screening_mode = screening_mode
 
     def analyse(self, rows, branch, cancel_check=lambda: None, progress=lambda stage: None, now=None):
         now = now or datetime.now(timezone.utc)
         started = time.perf_counter()
-        unique, duplicates, rejected, assessments, retained = {}, [], [], [], []
+        unique, duplicates, rejected, assessments, retained, uncertain = {}, [], [], [], [], []
         evidence, candidates, aspect_counts = {}, defaultdict(list), defaultdict(Counter)
         reasons = Counter()
         for row in rows:
@@ -216,16 +239,30 @@ class AnalysisEngine:
             cancel_check()
             text = normalized_text(row.get("content"))
             assessed = self.assessor(text) if text else {"decision": "retained", "reasons": ["NO_TEXT"], "spans": []}
-            if assessed["decision"] not in {"retained", "flagged"}:
+            if assessed["decision"] not in {"retained", "flagged", "uncertain"}:
                 raise ValueError("Invalid screening decision")
             if assessed["decision"] == "flagged" and not assessed["reasons"]:
                 raise ValueError("Flagged reviews require a reason")
+            assessed_reasons = list(assessed.get("reasons") or [])
+            if assessed["decision"] == "uncertain" and not assessed_reasons:
+                assessed_reasons = ["UNCERTAIN"]
             eligible = assessed["decision"] == "retained" and rating_value(row) is not None
-            assessment = {"review_id": rid, "decision": assessed["decision"], "reasons": assessed["reasons"], "aspects": [],
-                          "rating_eligible": eligible,
-                          "rating_reason": None if eligible else ("SCREENED_OUT" if assessed["decision"] == "flagged" else "NO_VALID_NUMERIC_RATING")}
-            reasons.update(assessed["reasons"])
+            if eligible:
+                rating_reason = None
+            elif assessed["decision"] == "flagged":
+                rating_reason = "SCREENED_OUT"
+            elif assessed["decision"] == "uncertain":
+                rating_reason = "SCREENING_UNCERTAIN"
+            else:
+                rating_reason = "NO_VALID_NUMERIC_RATING"
+            assessment = {"review_id": rid, "decision": assessed["decision"], "reasons": assessed_reasons, "aspects": [],
+                          "rating_eligible": eligible, "rating_reason": rating_reason,
+                          "method": assessed.get("method", "rules")}
+            reasons.update(assessed_reasons)
             assessments.append(assessment)
+            if assessed["decision"] == "uncertain":
+                uncertain.append(rid)
+                continue
             if assessed["decision"] == "flagged":
                 continue
             retained.append(row)
@@ -276,17 +313,26 @@ class AnalysisEngine:
             warnings.append("NO_USABLE_EVIDENCE")
         if rejected:
             warnings.append("REJECTED_SOURCE_RECORDS")
+        if uncertain:
+            warnings.append("UNCERTAIN_REVIEWS_EXCLUDED")
+            if any("LLM_DISABLED" in a["reasons"] for a in assessments):
+                warnings.append("LLM_DISABLED")
+            if any("LLM_UNAVAILABLE" in a["reasons"] for a in assessments):
+                warnings.append("LLM_UNAVAILABLE")
         cancel_check()
         dataset = hashlib.sha256(json.dumps(rows, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         return {"branch": branch, "counts": {"received": len(rows), "unique": len(unique), "duplicates": len(duplicates), "rejected": len(rejected),
-                "retained": len(retained), "flagged": len(unique) - len(retained), "text_eligible": len(evidence), "rating_eligible": score["valid_count"]},
+                "retained": len(retained), "flagged": len(unique) - len(retained) - len(uncertain), "uncertain": len(uncertain),
+                "text_eligible": len(evidence), "rating_eligible": score["valid_count"]},
                 "score": score, "aspects": [{"aspect": a, **{p: c[p] for p in ("positive", "negative", "neutral", "mixed", "unknown")}} for a, c in sorted(aspect_counts.items())],
                 "summary": summary, "screening": {"reason_counts": dict(reasons), "assessments": assessments,
+                "uncertain": len(uncertain),
                 "duplicate_records": [{"review_id": rid, "reason": "DUPLICATE_SOURCE_ID_OR_CONTENT_AUTHOR_DATE"} for rid in duplicates],
                 "rejected_records": rejected}, "sentiment_distribution": dict(sentiments),
                 "negative_rate_interval": wilson_interval(sentiments["negative"], sentiments["positive"] + sentiments["negative"]),
                 "rating_distribution": dict(Counter(format(v, "g") for r in retained if (v := rating_value(r)) is not None)),
                 "evidence": evidence, "warnings": warnings,
                 "review_period": {"start": min(dates).isoformat() if dates else None, "end": max(dates).isoformat() if dates else None},
-                "versions": {"pipeline": VERSION, "model": self.model_version, "dataset": dataset, "config": "score_defaults_v1"},
+                "versions": {"pipeline": VERSION, "model": self.model_version, "dataset": dataset,
+                             "config": "score_defaults_v1", "screening": self.screening_mode},
                 "analysis_seconds": time.perf_counter() - started}

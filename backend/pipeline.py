@@ -6,6 +6,8 @@ import tempfile
 from .analysis import AnalysisEngine
 from .job_manager import JobCancelled, NeedsOperator
 from .local_model import OllamaAssessor
+from .screening import HybridAssessor
+from .settings import Settings
 
 
 class Collector:
@@ -51,13 +53,25 @@ def search_branches(query, city, source, city_code=None):
                       os.getenv("DINELENS_BROWSER_PROFILE", str(Path("browser-profile").resolve())), "auto")
 
 
-def configured_engine():
-    mode = os.getenv("DINELENS_ANALYSIS_MODE", "rules")
+def configured_engine(settings=None):
+    settings = settings or Settings()
     method = os.getenv("DINELENS_SCORE_METHOD", "bayesian_time_v1")
-    if mode == "rules":
-        return AnalysisEngine(score_method=method)
-    if mode == "ollama":
-        model = os.getenv("DINELENS_OLLAMA_MODEL", "qwen2.5:3b")
-        assessor = OllamaAssessor(model, os.getenv("DINELENS_OLLAMA_URL", "http://127.0.0.1:11434"))
-        return AnalysisEngine(assessor, model_version="ollama:" + model + ":" + assessor.version, score_method=method)
-    raise ValueError("DINELENS_ANALYSIS_MODE must be rules or ollama")
+    if settings.llm_enabled:
+        model = settings.llm_model
+        llm = OllamaAssessor(model, settings.llm_url)
+        assessor = HybridAssessor(llm=llm, enabled=True)
+        return AnalysisEngine(assessor, model_version="hybrid:" + model + ":" + llm.version,
+                              score_method=method, screening_mode="rules+llm")
+    assessor = HybridAssessor(llm=None, enabled=False)
+    return AnalysisEngine(assessor, model_version="rules:vader3.3.2_zh_domain_v1",
+                          score_method=method, screening_mode="rules")
+
+
+def configured_analyser(settings=None):
+    """Build an analyser that reads the current LLM switch when a job starts."""
+    settings = settings or Settings()
+
+    def analyse(rows, branch, **kwargs):
+        return configured_engine(settings).analyse(rows, branch, **kwargs)
+
+    return analyse

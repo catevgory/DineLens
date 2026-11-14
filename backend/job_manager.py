@@ -142,6 +142,18 @@ class JobManager:
             )
             self._worker.start()
 
+    def status(self) -> dict:
+        """Small read-only snapshot for the local control panel."""
+        with self._lock:
+            counts: dict[str, int] = {}
+            for job in self._jobs.values():
+                counts[job.state] = counts.get(job.state, 0) + 1
+            return {
+                "worker_alive": bool(self._worker and self._worker.is_alive()),
+                "queue_size": self._queue.qsize(),
+                "jobs": counts,
+            }
+
     def shutdown(self, timeout: float = 2.0) -> None:
         """Ask the worker to stop and wait briefly for it."""
         self._stop.set()

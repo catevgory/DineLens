@@ -4,6 +4,16 @@
 
 This document describes how the program is built and how to use it.
 
+## Local control panel
+
+Double-click `start_all.bat` to start the backend (if it is not already running),
+the local-only control panel on `127.0.0.1:8765`, and an Edge app window. The
+panel shows backend, local web, tunnel, Pages, LLM and database status, exposes
+the LLM switch/model settings, and tails backend/admin/tunnel logs.
+
+It is intentionally local-only and does not expose tunnel or backend start/stop
+controls. See [`admin/README.md`](admin/README.md) for the admin token setup.
+
 ---
 
 ## How It Works
@@ -63,11 +73,15 @@ Normalized review fields: `source, store, poi_id, author, rating, date, content,
 
 ### 4. Analysis engine
 
-- `backend/analysis.py` consumes the existing normalized review dictionaries or `.jsonl` output. The default rules mode uses explicit promotional signals, English VADER and a Chinese domain lexicon. Local Ollama mode accepts a configured open-source model and validates its structured output. The pipeline provides:
-  - ad / malicious / fake review screening with reasons;
+- `backend/analysis.py` consumes the existing normalized review dictionaries or `.jsonl` output. Rules always run first and produce `retained`, `flagged`, or `uncertain` with reasons. The rules use explicit promotional signals, English VADER and a Chinese domain lexicon; duplicate and branch/source mismatches are handled separately.
+- Reviews that match a review-manipulation term plus a contact/offer term are sent to the `SUSPICIOUS_PROMOTION` route as `uncertain`, so legitimate complaints that merely mention fake reviews are not automatically flagged.
+- Local Ollama is optional. When enabled, only `uncertain` reviews go to the model; clear retained/flagged reviews never call it. When disabled or unavailable, uncertain reviews are excluded from scoring and the report, with explicit counts and warnings.
+- The pipeline provides:
+  - promotional / suspicious review screening with reasons;
   - positive/negative classification;
   - aspect tagging (food, service, price, atmosphere);
   - extractive summarization — the model may only quote original review text, never write new reviews.
+- See [`backend/README.md`](backend/README.md#规则筛查与-llm-开关) for the exact switch, settings file and report warnings.
 
 ### 5. Scoring
 
@@ -78,10 +92,12 @@ Normalized review fields: `source, store, poi_id, author, rating, date, content,
 - The report shows sample size, rating distribution, representative quotes, and what drives the score.
 - The implemented default is `bayesian_time_v1`. Wilson bounds are reported separately for the negative-review rate. Zero valid ratings produce a null score, and 1–4 ratings carry a low-sample warning. Mean-only and Bayesian-only modes support comparison.
 
-### 6. Web application (in progress)
+### 6. Web application and control panel
 
 - The FastAPI service in `backend/` connects the existing collectors to analysis and SQLite persistence. The single-worker queue supports cooperative cancellation while queued, collecting or analysing, checkpoint recovery, private history and revocable read-only sharing.
-- Open `/web/analysis.html` on the local backend, or `analysis.html` on Pages. See [`backend/README.md`](backend/README.md) for session/CSRF handoff, configuration and API details, and [`docs/personal_delivery.md`](docs/personal_delivery.md) for validation and remaining external dependencies.
+- Open `/web/analysis.html` on the local backend, or `analysis.html` on Pages. See [`backend/README.md`](backend/README.md) for session/CSRF handoff, configuration and API details.
+- `admin/` is a local-only control panel on `127.0.0.1:8765` for backend/frontend/tunnel/Pages/LLM/database status, the LLM switch and log tailing. Start it with `start_all.bat`; setup and security notes are in [`admin/README.md`](admin/README.md).
+- `docs/personal_delivery.md` records the validation and remaining external dependencies.
 
 ### 7. Tunnel tooling (`tools/`)
 
@@ -91,7 +107,7 @@ A companion manager for exposing the app from a home computer through **Cloudfla
 - multi-profile support — each profile stores tunnel name, domain, credentials path, local port and edge settings; per-profile cloudflared configs are generated automatically at start;
 - start/stop/restart, local-service switching, status dashboard, end-to-end self-check, log viewer, and a guard mode that reconnects automatically.
 
-See [`tools/README.md`](tools/README.md) for setup and usage.
+The local control panel reads the same tunnel profile and shows tunnel status plus a public self-check; start/stop/guard remain in the Tunnel Manager until Phase 3. See [`tools/README.md`](tools/README.md) for setup and usage.
 
 ## Repository Layout
 
@@ -103,11 +119,20 @@ DineLens/
 │   ├── amap_official.py     # AMap Web Service API wrapper
 │   ├── baidu_official.py    # Baidu Place API wrapper
 │   └── common.py            # storage & utility helpers
-├── backend/                 # minimal job service (FastAPI + cancellation)
+├── backend/                 # FastAPI job service, analysis and persistence
 │   ├── app.py
 │   ├── job_manager.py
-│   ├── test_cancel.py
+│   ├── analysis.py
+│   ├── settings.py
+│   ├── screening.py
+│   ├── logging_setup.py
 │   └── README.md
+├── admin/                   # local-only control panel (127.0.0.1:8765)
+│   ├── server.py
+│   ├── services/
+│   ├── static/
+│   └── README.md
+├── start_all.bat            # start backend + panel and open the dashboard
 ├── tools/                   # Cloudflare Tunnel manager (GUI + CLI)
 │   ├── tunnel.py
 │   ├── tunnel_gui.py
@@ -148,20 +173,29 @@ python main.py run --source amap --keyword "店名 城市" --city-code 330100 --
 
 Note: `--headed` opens a visible browser window so that a CAPTCHA/slider can be completed manually when a platform requires it; the verified session is stored in `browser-profile/` and reused afterwards.
 
-To run the minimal job service and the cancellation demo:
+To run the backend and the local control panel:
 
 ```bash
-python -m uvicorn backend.app:app --reload --port 8000
+# preferred on Windows: starts backend/panel if their ports are free and opens the dashboard
+start_all.bat
+
+# or manually
+python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
+python -m uvicorn admin.server:app --host 127.0.0.1 --port 8765
 ```
 
-Then open `http://127.0.0.1:8000/web/analysis.html` or `/docs`. `jobs-demo.html` continues to list and cancel owned jobs. Browser pages use an anonymous cookie and CSRF token, handled by `web/api.js`.
+Then open `http://127.0.0.1:8000/web/analysis.html` or `/docs`; the dashboard is
+`http://127.0.0.1:8765`. `jobs-demo.html` continues to list and cancel owned jobs.
+Browser pages use an anonymous cookie and CSRF token, handled by `web/api.js`.
+The control panel is local-only and requires `DINELENS_ADMIN_TOKEN`.
 
 ## Roadmap
 
 - **Phase 1 — Data pipeline** (done): search, collection, de-duplication, export.
-- **Phase 2 — Analysis engine**: rules and Ollama integration implemented, with conservative screening, constrained source quotations and real-model regression tests. Public sentiment benchmark results are recorded in `docs/validation/`. Screening quality evaluation awaits independently annotated reviews.
+- **Phase 2 — Analysis engine**: rules-first screening with optional Ollama for `uncertain` reviews, constrained source quotations and real-model regression tests. Public sentiment benchmark results are recorded in `docs/validation/`; screening quality evaluation still awaits independently annotated reviews.
 - **Phase 3 — Scoring & report**: weighted scoring, uncertainty bounds and explainable report pages implemented.
 - **Phase 4 — Web application**: persistent jobs, three-stage cancellation, private history and controlled sharing integrated. Live source verification, production deployment and independent screening evaluation remain team integration work.
+- **Phase 5 — Local operations**: local-only control panel with backend/frontend/tunnel/Pages/LLM/database status, rotating backend/admin logs, tunnel-log viewing, and the optional LLM switch. A supervised one-click backend start/stop, tunnel controls, job retry and deploy actions are the next admin-panel steps.
 
 ## Data & Compliance
 

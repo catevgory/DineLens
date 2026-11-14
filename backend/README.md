@@ -72,6 +72,58 @@ $env:OLLAMA_CONTEXT_LENGTH='4096'
 
 有效数字评分为 0 时综合分为 `null`，1 至 4 条提示样本少，至少 5 条标为 `adequate`。报告还单独给出已分类正负面评论中负面比例的 95% Wilson 区间。混合及未知情感单独保留。
 
+## 规则筛查与 LLM 开关
+
+实现位于 `backend/analysis.py`、`backend/local_model.py`、`backend/screening.py` 和 `backend/settings.py`；`backend/pipeline.py` 在每个任务启动时读取当前开关。
+
+规则筛查始终开启。每条评论先经过规则层，结果只有三种：
+
+- `retained`：规则能明确保留；
+- `flagged`：规则能明确标记（促销/代刷评论等）；
+- `uncertain`：规则无法确定情感或方面，或命中 `SUSPICIOUS_PROMOTION` 预路由。
+
+`SUSPICIOUS_PROMOTION` 只在一句话里同时出现“写/代写/刷/招 + 好评/评论/评价”和“微信/联系/返现/下单”等邀约词时触发；单纯抱怨“怀疑这家店刷好评”不会被这条规则带走。
+
+`uncertain` 评论的处理方式：
+
+- LLM 开关打开：交给本地模型判断 `retained` / `flagged`，保留的评论再抽取方面与原文片段；
+- LLM 开关关闭，或模型不可用：这些评论不进入评分、摘要和最终报告，计数写入 `counts.uncertain`，报告带 `UNCERTAIN_REVIEWS_EXCLUDED` 警告；
+- 模型调用失败会打开本轮任务的熔断，后续 `uncertain` 评论直接排除，不重复等待超时。
+
+开关保存在 `var/settings.json`（可用 `DINELENS_SETTINGS_PATH` 修改），启动时读取；规则模式不需要 Ollama。后台面板可通过以下接口读写：
+
+```text
+GET /settings
+PUT /settings
+X-Admin-Token: <DINELENS_ADMIN_TOKEN>
+```
+
+`PUT` 示例：
+
+```json
+{"llm_enabled": true, "llm_model": "qwen2.5:3b", "llm_url": "http://127.0.0.1:11434"}
+```
+
+`DINELENS_ADMIN_TOKEN` 未配置时，两个接口返回 403。`DINELENS_LLM_ENABLED=true` 或旧的 `DINELENS_ANALYSIS_MODE=ollama` 只作为**默认值**；如果 `settings.json` 已存在，以文件为准。开关按任务启动时读取，修改后对之后创建的任务生效。
+
+## 本地控制面板与日志
+
+`admin/` 是只监听 `127.0.0.1:8765` 的本地控制面板，不通过公网后端暴露。双击根目录的 `start_all.bat` 会在 8000/8765 端口空闲时启动后端和面板，并用 Edge app 模式打开面板。面板需要 `DINELENS_ADMIN_TOKEN`，同时用于后端的 `/settings`。
+
+面板提供：
+
+- 后端、本地 `/web/analysis.html`、Cloudflare Tunnel、Pages、LLM、SQLite 和 Git 状态；
+- LLM 开关/模型/URL 的保存与真实 screening 测试；
+- 后端、隧道、Admin 日志查看和最近失败任务。
+
+后端自身的控制/日志接口：
+
+- `GET /status`：版本、worker、队列和任务计数，不包含所有者数据；
+- 日志默认写入 `var/logs/backend.log`，可用 `DINELENS_LOG_DIR` 修改；后端和 Admin 日志使用 `backend/logging_setup.py` 的 5MB × 3 轮转；
+- 隧道日志仍在 `tools/tunnel.log`。
+
+面板的启动、权限、配置和后续计划见 [`admin/README.md`](../admin/README.md)。日志目录 `var/` 已被 Git 忽略。
+
 ## 会话与权限
 
 匿名用户先调用 `POST /owner-session`。服务器设置 HttpOnly、SameSite Cookie，并返回 CSRF token。所有者写操作带 `Origin` 和 `X-CSRF-Token`，私有资源按 Cookie 中的随机凭证隔离。数据库保存凭证哈希。
@@ -87,6 +139,9 @@ $env:OLLAMA_CONTEXT_LENGTH='4096'
 | 方法 | 路径 | 成功状态 | 用途 |
 | --- | --- | --- | --- |
 | GET | `/` | 200 | 健康检查 |
+| GET | `/status` | 200 | worker、队列和任务计数（本地面板/监控用） |
+| GET | `/settings` | 200 | 读取 LLM 开关、模型和 URL（需 admin token） |
+| PUT | `/settings` | 200 | 更新 LLM 设置（需 admin token；对新任务生效） |
 | POST GET | `/owner-session` | 201 或 200 | 建立或读取匿名会话 |
 | GET | `/branches?q=名称&city=城市&source=amap` | 200 | 搜索分店，可附 `city_code` |
 | POST | `/jobs` | 201 | 创建任务，可带 `Idempotency-Key` |
@@ -133,10 +188,19 @@ python -m backend.manage retry JOB_ID --reason "已完成来源验证"
 ## 验证
 
 ```powershell
+# default: 60 passed, 2 skipped (browser and live model are opt-in)
 python -m pytest -q
+
+# browser E2E
 $env:DINELENS_BROWSER_TESTS='1'
 $env:DINELENS_BROWSER_CHANNEL='msedge'
 python -m pytest backend/test_browser.py -q
+
+# real local Ollama regression
+$env:DINELENS_OLLAMA_TESTS='1'
+$env:DINELENS_OLLAMA_MODEL='qwen2.5:7b'
+$env:DINELENS_OLLAMA_URL='http://127.0.0.1:11434'
+python -m pytest backend/test_local_model_live.py -q
 ```
 
-浏览器测试使用真实页面、API、分析和数据库，并在采集边界注入固定样本。可选择 `chrome` 或安装 Playwright Chromium 后调整测试启动通道。测试、算法指标及真实来源检查记录位于 `docs/personal_delivery.md` 和 `docs/validation/`。
+默认测试不会启动浏览器或调用本机模型，因此是 2 skipped；单独开启后，真实 7B 模型测试为 1 passed + 6 subtests（本机 2026-11-15 结果）。浏览器测试使用真实页面、API、分析和数据库，并在采集边界注入固定样本。可选择 `chrome` 或安装 Playwright Chromium 后调整测试启动通道。测试、算法指标及真实来源检查记录位于 `docs/personal_delivery.md` 和 `docs/validation/`。

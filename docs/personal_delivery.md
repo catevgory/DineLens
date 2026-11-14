@@ -78,3 +78,12 @@ DL 15 已接入站内报告通知，包含持久化、未读数、已读状态�
 - 评估协作提供独立的可疑模式和方面情感标签。JSONL 标注格式可使用 `review` 和 `screening_label`，评估 CLI 会计算各类指标。
 
 待人工标注的真实评论共 200 条，位于本机 `var/validation/annotation-input.jsonl`。文件仅填入原评论和空的 `screening_label`，可复制给独立标注者。标注完成后使用评价 CLI 计算筛查指标，标注数据留在忽略目录中。
+
+## 后续更新（2026-11-15）
+
+- 规则筛查改为始终先跑，结果分为 `retained` / `flagged` / `uncertain`；`SUSPICIOUS_PROMOTION` 预路由只在“写/代写/刷/招 + 好评/评论/评价”与“微信/联系/返现/下单”等邀约词同时出现时触发。
+- LLM 改为可选且只处理 `uncertain` 评论；LLM 关闭或不可用时这些评论被排除，不进入评分和摘要，报告写入 `counts.uncertain`、`UNCERTAIN_REVIEWS_EXCLUDED`、`LLM_DISABLED` / `LLM_UNAVAILABLE`。明确 retained/flagged 的评论不再交给模型。
+- 开关保存在 `var/settings.json`，通过 `GET/PUT /settings`（`X-Admin-Token`）读写；对之后创建的任务生效。实现位于 `backend/settings.py`、`backend/screening.py`、`backend/analysis.py`、`backend/local_model.py`、`backend/pipeline.py`。
+- 新增只监听 `127.0.0.1:8765` 的本地控制面板 `admin/`，提供后端/前端/隧道/Pages/LLM/数据库状态、LLM 配置测试和日志查看；`start_all.bat` 负责启动。后端新增 `/status` 和轮转日志 `var/logs/backend.log`。
+- 当前默认测试为 60 passed、2 skipped；本地 Qwen2.5 7B Q4_K_M 的 opt-in live test 为 1 passed + 6 subtests（2026-11-15）。
+- 上文 50 项测试、UCI 评估、85% 筛查和真实高德耗时数据产生于混合筛查/控制面板之前；引用这些数字前需要重新跑评估。

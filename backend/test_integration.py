@@ -1,9 +1,11 @@
 from dataclasses import asdict
+import os
 from pathlib import Path
 import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -11,6 +13,7 @@ from .analysis import AnalysisEngine
 from .app import COOKIE, create_app
 from .job_manager import Job, JobManager
 from .pipeline import Collector
+from .settings import Settings
 from .storage import Storage
 from .test_analysis import BRANCH, row
 
@@ -21,6 +24,15 @@ class FixedCollector:
     def __call__(self, job, check):
         check()
         return [row(), row("服务友好，环境舒适。", None, "r2")]
+
+
+class UncertainCollector:
+    source_mode = "fixture"
+
+    def __call__(self, job, check):
+        check()
+        return [row("一般般", "4", "a"),
+                row("这家店可以帮忙写好评，加微信返现", "5", "b")]
 
 
 def wait(manager, jid, states=("done", "failed", "cancelled", "needs_operator")):
@@ -38,10 +50,13 @@ class IntegrationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name) / "test.db"
+        self.settings_path = Path(self.temp.name) / "settings.json"
 
-    def app(self, collector=None):
-        return create_app(database_path=self.path, collector=collector or FixedCollector(),
-                          searcher=lambda q, city, source, **kwargs: [BRANCH], origins=["http://testserver"])
+    def app(self, collector=None, settings_path=None):
+        path = Path(settings_path or self.settings_path)
+        with patch.dict(os.environ, {"DINELENS_SETTINGS_PATH": str(path)}, clear=False):
+            return create_app(database_path=self.path, collector=collector or FixedCollector(),
+                              searcher=lambda q, city, source, **kwargs: [BRANCH], origins=["http://testserver"])
 
     def session(self, client):
         response = client.post("/owner-session", headers={"Origin": "http://testserver"})
@@ -199,3 +214,47 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(wait(first, job["id"])["state"], "needs_operator")
         finally:
             first.shutdown()
+
+    def test_rules_only_uncertain_review_is_excluded(self):
+        app = self.app(collector=UncertainCollector())
+        with TestClient(app) as client:
+            headers = self.session(client)
+            created, _ = self.create(client, headers)
+            done = wait(app.state.manager, created["id"])
+            self.assertEqual(done["state"], "done")
+            report = client.get("/reports/" + done["report_id"]).json()
+            self.assertEqual(report["counts"]["uncertain"], 2)
+            self.assertEqual(report["score"]["valid_count"], 0)
+            self.assertIn("UNCERTAIN_REVIEWS_EXCLUDED", report["warnings"])
+            self.assertIn("LLM_DISABLED", report["warnings"])
+            reasons = {reason for item in report["screening"]["assessments"] for reason in item["reasons"]}
+            self.assertIn("SUSPICIOUS_PROMOTION", reasons)
+
+    def test_status_endpoint_reports_worker(self):
+        app = self.app()
+        with TestClient(app) as client:
+            data = client.get("/status").json()
+            self.assertTrue(data["worker_alive"])
+            self.assertEqual(data["queue_size"], 0)
+            self.assertIn("jobs", data)
+
+    def test_settings_endpoint_requires_admin_and_persists(self):
+        settings_path = Path(self.temp.name) / "settings.json"
+        with patch.dict(os.environ, {"DINELENS_ADMIN_TOKEN": "test-admin"}, clear=False):
+            app = self.app(settings_path=settings_path)
+            with TestClient(app) as client:
+                self.assertEqual(client.get("/settings").status_code, 403)
+                self.assertEqual(client.put("/settings", json={"llm_enabled": True}).status_code, 403)
+                headers = {"X-Admin-Token": "test-admin"}
+                current = client.get("/settings", headers=headers)
+                self.assertEqual(current.status_code, 200)
+                self.assertFalse(current.json()["llm_enabled"])
+                updated = client.put("/settings", headers=headers,
+                                     json={"llm_enabled": True, "llm_model": "qwen2.5:3b",
+                                           "llm_url": "http://127.0.0.1:11434"})
+                self.assertEqual(updated.status_code, 200, updated.text)
+                self.assertTrue(updated.json()["llm_enabled"])
+                self.assertTrue(Settings(settings_path).llm_enabled)
+                invalid = client.put("/settings", headers=headers,
+                                     json={"llm_enabled": False, "llm_url": "ftp://bad"})
+                self.assertEqual(invalid.status_code, 422)

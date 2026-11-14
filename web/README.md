@@ -67,3 +67,7 @@ DineLens/
   creating an analysis job. API requests use an anonymous HttpOnly cookie and
   CSRF token via `api.js`. Configure `DINELENS_ORIGINS` for the Pages domain and
   `DINELENS_COOKIE_SECURE=true` for HTTPS deployment.
+- `report.html` / `report.js` show `counts.uncertain` and the
+  `UNCERTAIN_REVIEWS_EXCLUDED`, `LLM_DISABLED` and `LLM_UNAVAILABLE` warnings;
+  screening assessments label `SUSPICIOUS_PROMOTION`. The behavior is defined in
+  [`backend/README.md`](../backend/README.md#规则筛查与-llm-开关).
